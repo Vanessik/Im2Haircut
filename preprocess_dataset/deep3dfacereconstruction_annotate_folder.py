@@ -34,8 +34,10 @@ class Deep3DFaceReconstruction_Processor:
         
         bfm_folder = os.path.join(model_name, "BFM")
         ckpts_dir = os.path.join(model_name, "checkpoints/pretrained")
+        
 
         opt = TestOptions(cmd_line=f"--name={model_name} --epoch={epoch} --bfm_folder={bfm_folder} --checkpoints_dir={ckpts_dir} --use_opengl=False").parse()
+        
         model = FaceReconModel(opt)
         model.setup(opt)
         model.device = device
@@ -52,6 +54,7 @@ class Deep3DFaceReconstruction_Processor:
             keep_all=True,
         )
         lm3d_std = load_lm3d(opt.bfm_folder)
+        
         face_model = ParametricFaceModel(bfm_folder=bfm_folder)
 
         self.opt = opt
@@ -216,7 +219,7 @@ class Deep3DFaceReconstruction_Processor:
 
 
 
-def annotate_dir(img_dir: Path, out_kp_dir: Path, out_bfm_dir: Path, out_normal_dir: Path, out_mesh_dir: Path, out_cam_dir: Path):
+def annotate_dir(deep3dface, img_dir: Path, out_kp_dir: Path, out_bfm_dir: Path, out_normal_dir: Path, out_mesh_dir: Path, out_cam_dir: Path):
     out_kp_dir.mkdir(exist_ok=True, parents=True)
     out_bfm_dir.mkdir(exist_ok=True, parents=True)
     out_mesh_dir.mkdir(exist_ok=True, parents=True)
@@ -227,62 +230,55 @@ def annotate_dir(img_dir: Path, out_kp_dir: Path, out_bfm_dir: Path, out_normal_
     in_hair_files = sorted([f for f in img_dir.iterdir() if f.name.lower().endswith(".png") or f.name.lower().endswith(".jpg")])
         
     for img_path in tqdm.tqdm(in_hair_files, leave=False):
-        
-        try:
-            img = Image.open(img_path).convert("RGB")
 
+        img = Image.open(img_path).convert("RGB")
 
-            # size = img.size
-            # img = img.resize([x // (4 * 8) * 8 for x in size])
+        img = np.array(img)
+        lmks = deep3dface.detect_lmks(img)
 
-            img = np.array(img)
-            lmks = deep3dface.detect_lmks(img)
+        if lmks is None:
+            print(f"ERROR WITH FILE {img_path}")
+            head_coeffs = dict(id=None, exp=None, tex=None, angle=None, gamma=None, trans=None)
+            lmks_68 = np.array([])
+            P = np.array([])
+        else:
+            head_coeffs = deep3dface.get_head_coeffs(img, lmks)
+            K = head_coeffs["facemodel_perc_proj"].T  # assuming x:right, y:down, z: view direction, image origin: top left; matches exported mesh
+            K[1, 2] = head_coeffs["rasterize_size"][0] - K[1, 2]
+            head_coeffs["K"] = K
+            P = np.eye(4)[:3]
+            P[:3, :3] = K
+            head_coeffs["P"] = P
+            lmks_68 = deep3dface.model.pred_lm[0].cpu().numpy() / np.array([[img.shape[1], img.shape[0]]])
+            lmks_68[:, 1] = 1 - lmks_68[:, 1]
 
-            if lmks is None:
-                print(f"ERROR WITH FILE {img_path}")
-                head_coeffs = dict(id=None, exp=None, tex=None, angle=None, gamma=None, trans=None)
-                lmks_68 = np.array([])
-                P = np.array([])
-            else:
-                head_coeffs = deep3dface.get_head_coeffs(img, lmks)
-                K = head_coeffs["facemodel_perc_proj"].T  # assuming x:right, y:down, z: view direction, image origin: top left; matches exported mesh
-                K[1, 2] = head_coeffs["rasterize_size"][0] - K[1, 2]
-                head_coeffs["K"] = K
-                P = np.eye(4)[:3]
-                P[:3, :3] = K
-                head_coeffs["P"] = P
-                lmks_68 = deep3dface.model.pred_lm[0].cpu().numpy() / np.array([[img.shape[1], img.shape[0]]])
-                lmks_68[:, 1] = 1 - lmks_68[:, 1]
+            for k, v in head_coeffs.items():
+                head_coeffs[k] = v.tolist()
 
-                for k, v in head_coeffs.items():
-                    head_coeffs[k] = v.tolist()
+        out_kp_file = out_kp_dir / (img_path.name.split(".")[0] + ".txt")
+        out_bfm_file = out_bfm_dir / (img_path.name.split(".")[0] + ".json")
+        out_normal_file = out_normal_dir / (img_path.name.split(".")[0] + ".jpg")
+        out_mesh_file = out_mesh_dir / (img_path.name.split(".")[0] + ".obj")
+        out_cam_file = out_cam_dir / (img_path.name.split(".")[0] + ".txt")
 
-            out_kp_file = out_kp_dir / (img_path.name.split(".")[0] + ".txt")
-            out_bfm_file = out_bfm_dir / (img_path.name.split(".")[0] + ".json")
-            out_normal_file = out_normal_dir / (img_path.name.split(".")[0] + ".jpg")
-            out_mesh_file = out_mesh_dir / (img_path.name.split(".")[0] + ".obj")
-            out_cam_file = out_cam_dir / (img_path.name.split(".")[0] + ".txt")
+        pred_normal = (deep3dface.model.pred_normal * .5 + .5) * deep3dface.model.pred_mask
+        pred_normal = np.clip(np.round(255. * pred_normal.detach().cpu().permute(0, 2, 3, 1).numpy()[0]), a_min=0, a_max=255).astype(np.uint8)
 
-            pred_normal = (deep3dface.model.pred_normal * .5 + .5) * deep3dface.model.pred_mask
-            pred_normal = np.clip(np.round(255. * pred_normal.detach().cpu().permute(0, 2, 3, 1).numpy()[0]), a_min=0, a_max=255).astype(np.uint8)
+        np.savetxt(out_kp_file, np.array(lmks_68))
 
-            np.savetxt(out_kp_file, np.array(lmks_68))
+        with open(out_bfm_file, "w") as f:
+            json.dump(head_coeffs, f, indent="\t")
 
-            with open(out_bfm_file, "w") as f:
-                json.dump(head_coeffs, f, indent="\t")
+        Image.fromarray(pred_normal).save(out_normal_file)
 
-            Image.fromarray(pred_normal).save(out_normal_file)
+        # saving mesh
+        pred_verts = deep3dface.model.pred_vertex[0]
 
-            # saving mesh
-            pred_verts = deep3dface.model.pred_vertex[0]
-
-            pred_verts[:, 1] *= -1  # converts camera convention from left-handed system used by eg3d/deep3dfacerecon (camera coordinates: x: right; y: top, z: in view direction)
-            # to right-handed coordinate system: (camera coordinates: x: right, y:down, z: in view direction); matches 'K' in exported bfm parameters
-            faces = deep3dface.model.facemodel.face_buf
-            save_obj(out_mesh_file, pred_verts, faces)
-            np.savetxt(out_cam_file, P)
-        except Exception as e:
-            print(e, 'canera issues for image', img_path)
+        pred_verts[:, 1] *= -1  # converts camera convention from left-handed system used by eg3d/deep3dfacerecon (camera coordinates: x: right; y: top, z: in view direction)
+        # to right-handed coordinate system: (camera coordinates: x: right, y:down, z: in view direction); matches 'K' in exported bfm parameters
+        faces = deep3dface.model.facemodel.face_buf
+        save_obj(out_mesh_file, pred_verts, faces)
+        np.savetxt(out_cam_file, P)
 
 
 def main(args, device='cuda'):
@@ -302,13 +298,17 @@ def main(args, device='cuda'):
 
     my_idcs = np.array_split(all_idcs, njobs)[jobid]
     for i in tqdm.tqdm(my_idcs, leave=True):
+        print('start processing!')
         img_dir = all_img_dirs[i]
-        out_kp_dir = img_dir.parent / "kps" + args.save_postfix
-        out_bfm_dir = img_dir.parent / "bfm" + args.save_postfix
-        out_normal_dir = img_dir.parent / "bfm_normals" + args.save_postfix
-        out_mesh_dir = img_dir.parent / "bfm_meshes" + args.save_postfix
 
-        annotate_dir(img_dir, out_kp_dir, out_bfm_dir, out_normal_dir, out_mesh_dir, out_cam_dir)
+        out_kp_dir = img_dir.parent / f"kps{args.save_postfix}"
+        out_bfm_dir = img_dir.parent / f"bfm{args.save_postfix}"
+        out_normal_dir = img_dir.parent / f"bfm_normals{args.save_postfix}"
+        out_mesh_dir = img_dir.parent / f"bfm_meshes{args.save_postfix}"
+        out_cam_dir = img_dir.parent / f"bfm_cameras{args.save_postfix}"
+
+
+        annotate_dir(deep3dface, img_dir, out_kp_dir, out_bfm_dir, out_normal_dir, out_mesh_dir, out_cam_dir)
 
 
 

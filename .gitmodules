@@ -9,7 +9,7 @@
 	url = https://github.com/apple/ml-depth-pro.git
 [submodule "submodules/external/Deep3DFaceRecon_pytorch"]
 	path = submodules/external/Deep3DFaceRecon_pytorch
-	url = https://github.com/sicxu/Deep3DFaceRecon_pytorch.git
+	url = https://github.com/Vanessik/Deep3DFaceRecon_pytorch.git
 [submodule "submodules/external/VOODOO3D-official"]
 	path = submodules/external/VOODOO3D-official
 	url = https://github.com/mbzuai-metaverse/VOODOO3D-official.git
