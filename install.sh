@@ -55,7 +55,7 @@ conda create -y -n matte_anything \
     
 
 # Download Im2Haircut files:
-gdown https://drive.google.com/uc?id=1788vcfmdXIJKePOmBYVjC1Ts8IgeZb-_
+gdown https://drive.google.com/uc?id=1xFjXmdqLIIOGKOW_akxcDVIalTbo-bkg
 tar -xzvf data.tar.gz
 
 # Download Im2Haircut checkpoints:
