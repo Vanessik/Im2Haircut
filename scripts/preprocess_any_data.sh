@@ -50,7 +50,7 @@ python scripts/img2strand.py --root_real_imgs "$path/$path_set"
 echo "Finished direction maps and silhouette estimation."
 
 # Step 2: Orientation maps and confidence maps
-cd PROGECT_DIR && python ./preprocess_dataset/calc_gabor_mask.py --img_path "$path/$path_set/resized_img" \
+cd $PROGECT_DIR && python ./preprocess_dataset/calc_gabor_mask.py --img_path "$path/$path_set/resized_img" \
     --path_to_save "$path/$path_set/orientation_maps/" \
     --path_to_save_conf "$path/$path_set/confidence_maps"
     
@@ -59,13 +59,13 @@ echo "Finished gabor maps estimation."
 # Step 3: Depth processing
 conda deactivate && conda activate ml-depth-pro
 
-cd PROGECT_DIR && cd ./submodules/external/ml-depth-pro
+cd $PROGECT_DIR && cd ./submodules/external/ml-depth-pro
 depth-pro-run -i "$path/$path_set/resized_img/" -o "$path/$path_set/depth_apple_pro"
 
 echo "Finished depth estimation."
 
 # Step 4: data alignment
-cd PROGECT_DIR && python ./preprocess_dataset/calc_alignment.py --img_path "$path/$path_set/resized_img" \
+cd $PROGECT_DIR && python ./preprocess_dataset/calc_alignment.py --img_path "$path/$path_set/resized_img" \
     --hair_path "$path/$path_set/seg" \
     --all_paths_for_processing seg body_img orientation_maps depth_apple_pro strand_map \
     --gt_img_path "/home/vsklyarova/Projects/Im2Haircut_developer/data/aligned_image.png"
@@ -77,13 +77,13 @@ export PYTHONPATH=$PROGECT_DIR
 
 conda deactivate && conda activate deep3d_pytorch
 
-cd PROGECT_DIR
+cd $PROGECT_DIR
 python ./preprocess_dataset/deep3dfacereconstruction_annotate_folder.py --root_path "$path/$path_set/resized_img_aligned" --save_postfix "_aligned"
 python ./preprocess_dataset/deep3dfacereconstruction_annotate_folder.py --root_path "$path/${path_set}/resized_img"
 
 # # Step 6: Projection matrix calculation
 conda deactivate && conda activate hairstep
-cd PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"
-cd PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"  --save_postfix "_aligned"
+cd $PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"
+cd $PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"  --save_postfix "_aligned"
 
 echo "Pipeline finished."
