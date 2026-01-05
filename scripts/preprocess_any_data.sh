@@ -59,7 +59,7 @@ echo "Finished gabor maps estimation."
 # Step 3: Depth processing
 conda deactivate && conda activate ml-depth-pro
 
-cd $PROGECT_DIR && cd ./submodules/external/ml-depth-pro
+cd $PROGECT_DIR && cd ./submodules/external/ml-depth-pro 
 depth-pro-run -i "$path/$path_set/resized_img/" -o "$path/$path_set/depth_apple_pro"
 
 echo "Finished depth estimation."
@@ -83,7 +83,7 @@ python ./preprocess_dataset/deep3dfacereconstruction_annotate_folder.py --root_p
 
 # # Step 6: Projection matrix calculation
 conda deactivate && conda activate hairstep
-cd $PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"
-cd $PROGECT_DIR &&  python calc_proj_matx.py --root_path "$path/$path_set"  --save_postfix "_aligned"
+cd $PROGECT_DIR &&  python ./preprocess_dataset/calc_proj_matx.py --root_path "$path/$path_set"
+cd $PROGECT_DIR &&  python ./preprocess_dataset/calc_proj_matx.py --root_path "$path/$path_set"  --save_postfix "_aligned"
 
 echo "Pipeline finished."
