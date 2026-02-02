@@ -41,6 +41,7 @@ source get_pretrained_models.sh
 
 # # 3) Install Deep3DFaceRecon_pytorch following https://github.com/sicxu/Deep3DFaceRecon_pytorch:
 cd $PROJECT_DIR && cd ./submodules/external/Deep3DFaceRecon_pytorch
+git checkout ab35e02
 
 conda env create -f environment.yml
 source activate deep3d_pytorch
